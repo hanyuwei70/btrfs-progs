@@ -141,11 +141,49 @@ static int cmp_chunk_info(const void *a, const void *b)
 	return cmp_chunk_block_group((*pa)->type, (*pb)->type);
 }
 
+struct search_args {
+	union {
+		struct btrfs_ioctl_search_args args1;
+		struct btrfs_ioctl_search_args_v2 args2;
+		u8 filler[sizeof(struct btrfs_ioctl_search_args_v2) + 65536];
+	};
+	bool initialized;
+	bool use_v2;
+};
+
+static struct btrfs_ioctl_search_key *search_tree_sk(struct search_args *sa)
+{
+	/* Same offset for v1 and v2. */
+	return &sa->args1.key;
+}
+
+static int search_tree_ioctl(int fd, struct search_args *sa)
+{
+	if (!sa->initialized) {
+		if (btrfs_tree_search2_ioctl_supported(fd) == 1) {
+			sa->use_v2 = true;
+		}
+		sa->initialized = true;
+	}
+
+	if (sa->use_v2) {
+		sa->args2.buf_size = 65536;
+		return ioctl(fd, BTRFS_IOC_TREE_SEARCH_V2, &sa->args2);
+	}
+	return ioctl(fd, BTRFS_IOC_TREE_SEARCH, &sa->args2);
+}
+
+static void *search_tree_data(struct search_args *sa, unsigned long offset) {
+	if (sa->use_v2)
+		return (void *)(sa->args2.buf + offset);
+	return (void *)(sa->args1.buf + offset);
+}
+
 static int load_chunk_info(int fd, struct array *chunkinfos)
 {
 	int ret;
-	struct btrfs_ioctl_search_args args;
-	struct btrfs_ioctl_search_key *sk = &args.key;
+	struct search_args args;
+	struct btrfs_ioctl_search_key *sk;
 	struct btrfs_ioctl_search_header *sh;
 	unsigned long off = 0;
 	int i;
@@ -157,6 +195,7 @@ static int load_chunk_info(int fd, struct array *chunkinfos)
 	 * snapshots pending deletion, we have to loop through
 	 * them.
 	 */
+	sk = search_tree_sk(&args);
 	sk->tree_id = BTRFS_CHUNK_TREE_OBJECTID;
 
 	sk->min_objectid = 0;
@@ -170,7 +209,7 @@ static int load_chunk_info(int fd, struct array *chunkinfos)
 	sk->nr_items = 4096;
 
 	while (1) {
-		ret = ioctl(fd, BTRFS_IOC_TREE_SEARCH, &args);
+		ret = search_tree_ioctl(fd, &args);
 		if (ret < 0) {
 			if (errno == EPERM)
 				return -errno;
@@ -185,11 +224,10 @@ static int load_chunk_info(int fd, struct array *chunkinfos)
 		off = 0;
 		for (i = 0; i < sk->nr_items; i++) {
 			struct btrfs_chunk *item;
-			sh = (struct btrfs_ioctl_search_header *)(args.buf +
-								  off);
 
+			sh = search_tree_data(&args, off);
 			off += sizeof(*sh);
-			item = (struct btrfs_chunk *)(args.buf + off);
+			item = search_tree_data(&args, off);
 
 			ret = add_info_to_list(chunkinfos, item);
 			if (ret)
