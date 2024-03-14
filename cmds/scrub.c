@@ -414,7 +414,7 @@ static void scrub_sigint_record_progress(int signal)
 
 	ret = ioctl(cancel_fd, BTRFS_IOC_SCRUB_CANCEL, NULL);
 	if (ret < 0)
-		perror("Scrub cancel failed");
+		error("scrub cancel failed: %m");
 }
 
 static int scrub_handle_sigint_parent(void)

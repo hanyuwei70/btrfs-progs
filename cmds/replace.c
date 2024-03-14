@@ -77,7 +77,7 @@ static void dev_replace_sigint_handler(int signal)
 	args.cmd = BTRFS_IOCTL_DEV_REPLACE_CMD_CANCEL;
 	ret = ioctl(dev_replace_cancel_fd, BTRFS_IOC_DEV_REPLACE, &args);
 	if (ret < 0)
-		perror("Device replace cancel failed");
+		error("device replace cancel failed: %m");
 }
 
 static int dev_replace_handle_sigint(int fd)

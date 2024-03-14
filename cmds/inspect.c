@@ -1259,9 +1259,9 @@ static int read_chunk_tree(int fd, struct chunk **chunks, size_t *num_chunks)
 		if (items_pos >= sk->nr_items) {
 			sk->nr_items = 4096;
 			ret = btrfs_tree_search_ioctl(fd, &args);
-			if (ret == -1) {
-				perror("BTRFS_IOC_TREE_SEARCH");
-				return -1;
+			if (ret < 0) {
+				error_msg(ERROR_MSG_TREE_SEARCH, "%m");
+				return -errno;
 			}
 			items_pos = 0;
 			buf_off = 0;
@@ -1286,8 +1286,8 @@ static int read_chunk_tree(int fd, struct chunk **chunks, size_t *num_chunks)
 				capacity *= 2;
 			tmp = realloc(*chunks, capacity * sizeof(**chunks));
 			if (!tmp) {
-				perror("realloc");
-				return -1;
+				error_msg(ERROR_MSG_MEMORY, NULL);
+				return -ENOMEM;
 			}
 			*chunks = tmp;
 		}
@@ -1302,8 +1302,8 @@ static int read_chunk_tree(int fd, struct chunk **chunks, size_t *num_chunks)
 		chunk->stripes = calloc(chunk->num_stripes,
 					sizeof(*chunk->stripes));
 		if (!chunk->stripes) {
-			perror("calloc");
-			return -1;
+			error_msg(ERROR_MSG_MEMORY, NULL);
+			return -ENOMEM;
 		}
 		(*num_chunks)++;
 

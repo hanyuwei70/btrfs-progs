@@ -538,7 +538,7 @@ static int cmd_device_ready(const struct cmd_struct *cmd, int argc, char **argv)
 
 	fd = open("/dev/btrfs-control", O_RDWR);
 	if (fd < 0) {
-		perror("failed to open /dev/btrfs-control");
+		error("failed to open /dev/btrfs-control: %m");
 		return 1;
 	}
 

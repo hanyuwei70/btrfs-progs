@@ -808,7 +808,7 @@ static int lookup_ino_path(int fd, struct root_info *ri)
 		/* we're at the root of ref_tree */
 		ri->path = strdup(ri->name);
 		if (!ri->path) {
-			perror("strdup failed");
+			error_msg(ERROR_MSG_MEMORY, NULL);
 			exit(1);
 		}
 	}
