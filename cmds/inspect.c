@@ -1003,7 +1003,7 @@ static u64 fill_usage(int fd, u64 lstart)
 	/* Only one item, we don't need search header. */
 	item = btrfs_tree_search_data(&args, sizeof(struct btrfs_ioctl_search_header));
 
-	return item->used;
+	return btrfs_stack_block_group_used(item);
 }
 
 static int cmd_inspect_list_chunks(const struct cmd_struct *cmd,
@@ -1123,17 +1123,17 @@ static int cmd_inspect_list_chunks(const struct cmd_struct *cmd,
 			off += sh.len;
 
 			stripes = &item->stripe;
-			for (sidx = 0; sidx < item->num_stripes; sidx++) {
+			for (sidx = 0; sidx < btrfs_stack_chunk_num_stripes(item); sidx++) {
 				struct list_chunks_entry *e;
 				u64 devid;
 
 				e = &ctx.stats[ctx.length];
-				devid = stripes[sidx].devid;
+				devid = btrfs_stack_stripe_devid(&stripes[sidx]);
 				e->devid = devid;
-				e->start = stripes[sidx].offset;
+				e->start = btrfs_stack_stripe_offset(&stripes[sidx]);
 				e->lstart = sh.offset;
-				e->length = item->length;
-				e->flags = item->type;
+				e->length = btrfs_stack_chunk_length(item);
+				e->flags = btrfs_stack_chunk_type(item);
 				e->number = -1;
 				while (devid > lnumber_size) {
 					u64 *tmp;
@@ -1294,11 +1294,11 @@ static int read_chunk_tree(int fd, struct chunk **chunks, size_t *num_chunks)
 
 		chunk = &(*chunks)[*num_chunks];
 		chunk->offset = sh.offset;
-		chunk->length = le64_to_cpu(item->length);
-		chunk->stripe_len = le64_to_cpu(item->stripe_len);
-		chunk->type = le64_to_cpu(item->type);
-		chunk->num_stripes = le16_to_cpu(item->num_stripes);
-		chunk->sub_stripes = le16_to_cpu(item->sub_stripes);
+		chunk->length = btrfs_stack_chunk_length(item);
+		chunk->stripe_len = btrfs_stack_chunk_stripe_len(item);
+		chunk->type = btrfs_stack_chunk_type(item);
+		chunk->num_stripes = btrfs_stack_chunk_num_stripes(item);
+		chunk->sub_stripes = btrfs_stack_chunk_sub_stripes(item);
 		chunk->stripes = calloc(chunk->num_stripes,
 					sizeof(*chunk->stripes));
 		if (!chunk->stripes) {
@@ -1311,8 +1311,8 @@ static int read_chunk_tree(int fd, struct chunk **chunks, size_t *num_chunks)
 			const struct btrfs_stripe *stripe;
 
 			stripe = &item->stripe + i;
-			chunk->stripes[i].devid = le64_to_cpu(stripe->devid);
-			chunk->stripes[i].offset = le64_to_cpu(stripe->offset);
+			chunk->stripes[i].devid = btrfs_stack_stripe_devid(stripe);
+			chunk->stripes[i].offset = btrfs_stack_stripe_offset(stripe);
 		}
 
 next:
@@ -1420,10 +1420,10 @@ static int map_physical_start(int fd, struct chunk *chunks, size_t num_chunks,
 
 		item = btrfs_tree_search_data(&args, buf_off);
 
-		type = item->type;
+		type = btrfs_stack_file_extent_type(item);
 		if (type == BTRFS_FILE_EXTENT_REG ||
 		    type == BTRFS_FILE_EXTENT_PREALLOC) {
-			logical_offset = le64_to_cpu(item->disk_bytenr);
+			logical_offset = btrfs_stack_file_extent_disk_bytenr(item);
 			if (logical_offset) {
 				/* Regular extent */
 				chunk = find_chunk(chunks, num_chunks, logical_offset);
@@ -1446,18 +1446,18 @@ static int map_physical_start(int fd, struct chunk *chunks, size_t num_chunks,
 			goto out;
 		}
 
-		if (item->compression != 0) {
-			error("compressed extent: %u", item->compression);
+		if (btrfs_stack_file_extent_compression(item) != 0) {
+			error("compressed extent: %u", btrfs_stack_file_extent_compression(item));
 			ret = -EINVAL;
 			goto out;
 		}
-		if (item->encryption != 0) {
-			error("file with encryption: %u", item->encryption);
+		if (btrfs_stack_file_extent_encryption(item) != 0) {
+			error("file with encryption: %u", btrfs_stack_file_extent_encryption(item));
 			ret = -EINVAL;
 			goto out;
 		}
-		if (item->other_encoding != 0) {
-			error("file with other_encoding: %u", le16_to_cpu(item->other_encoding));
+		if (btrfs_stack_file_extent_other_encoding(item) != 0) {
+			error("file with other_encoding: %u", btrfs_stack_file_extent_other_encoding(item));
 			ret = -EINVAL;
 			goto out;
 		}
